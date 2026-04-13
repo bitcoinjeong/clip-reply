@@ -85,6 +85,14 @@ for key, val in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
+
+def _reset_for_new_video():
+    """Callback to clear all state including the URL input widget."""
+    for key, val in defaults.items():
+        if key != "videos_today":
+            st.session_state[key] = val
+    st.session_state["url_input"] = ""
+
 FREE_LIMIT = 3
 
 # --- Header ---
@@ -191,12 +199,11 @@ if st.session_state.summary:
         show_transcript = st.toggle("Show transcript")
 
     with col_clear:
-        if st.button("New video", use_container_width=True):
-            for key, val in defaults.items():
-                if key != "videos_today":
-                    st.session_state[key] = val
-            st.session_state["url_input"] = ""
-            st.rerun()
+        st.button(
+            "New video",
+            use_container_width=True,
+            on_click=_reset_for_new_video,
+        )
 
     if show_transcript:
         with st.expander("Full Transcript", expanded=True):
