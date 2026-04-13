@@ -2,6 +2,7 @@
 
 import streamlit as st
 import html
+import requests
 
 from transcriber import get_transcript, is_youtube_url, is_tiktok_url
 from summarizer import summarize, answer_question

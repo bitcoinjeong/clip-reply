@@ -46,7 +46,7 @@ def get_youtube_transcript(video_id: str) -> str:
     except NoTranscriptFound:
         raise ValueError("No transcript found for this video. It may not have subtitles.")
     except Exception as e:
-        raise ValueError(f"Failed to fetch transcript: {html.escape(str(e))}")
+        raise ValueError(f"Failed to fetch transcript: {str(e)}")
 
 
 def get_transcript(url: str) -> tuple[str, str]:
