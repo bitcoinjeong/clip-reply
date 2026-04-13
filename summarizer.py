@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 
 
-OLLAMA_BASE_URL = "https://api.ohmyllama.com/v1"
+OLLAMA_BASE_URL = "https://api.ollama.com/v1"
 MODEL = "llama3"
 
 
