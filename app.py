@@ -99,6 +99,7 @@ col_input, col_btn = st.columns([5, 1])
 with col_input:
     url = st.text_input(
         "Video URL",
+        key="url_input",
         placeholder="https://www.youtube.com/watch?v=...",
         label_visibility="collapsed",
     )
@@ -193,6 +194,7 @@ if st.session_state.summary:
             for key, val in defaults.items():
                 if key != "videos_today":
                     st.session_state[key] = val
+            st.session_state["url_input"] = ""
             st.rerun()
 
     if show_transcript:
