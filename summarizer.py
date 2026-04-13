@@ -108,14 +108,13 @@ def _call_llm(messages: list[dict], max_tokens: int = 1000) -> str:
         return _call_openai_compat(messages, max_tokens)
 
 
-def _detect_korean(text: str) -> bool:
-    """Check if text contains Korean characters."""
-    korean_count = sum(1 for c in text[:500] if "\uac00" <= c <= "\ud7a3")
-    return korean_count > 10
+def summarize(transcript: str, lang: str = "ko") -> str:
+    """Generate a structured summary of the video transcript.
 
-
-def summarize(transcript: str) -> str:
-    """Generate a structured summary of the video transcript."""
+    Args:
+        transcript: The video transcript text.
+        lang: Output language - "ko" for Korean, "en" for English.
+    """
     if not transcript or not transcript.strip():
         raise ValueError("Transcript is empty. Cannot generate summary.")
 
@@ -124,9 +123,7 @@ def summarize(transcript: str) -> str:
     if len(transcript) > max_chars:
         truncated += "\n\n[... transcript truncated ...]"
 
-    is_korean = _detect_korean(transcript)
-
-    if is_korean:
+    if lang == "ko":
         messages = [
             {
                 "role": "system",
@@ -138,7 +135,7 @@ def summarize(transcript: str) -> str:
             {
                 "role": "user",
                 "content": (
-                    "다음 영상 자막을 요약해줘. 반드시 한국어로 작성해:\n"
+                    "다음 영상 자막을 요약해줘. 자막이 영어여도 반드시 한국어로 작성해:\n"
                     "1. 한 줄 요약 (TL;DR)\n"
                     "2. 핵심 포인트 3~5개 (불릿)\n"
                     "3. 주요 키워드/토픽\n\n"
@@ -152,13 +149,13 @@ def summarize(transcript: str) -> str:
                 "role": "system",
                 "content": (
                     "You are a video summarization assistant. "
-                    "Write concise, accurate summaries."
+                    "Write concise, accurate summaries in English."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    "Summarize this video transcript. Provide:\n"
+                    "Summarize this video transcript in English. Provide:\n"
                     "1. A one-line TL;DR\n"
                     "2. 3-5 key bullet points\n"
                     "3. Key topics/keywords mentioned\n\n"
@@ -170,23 +167,29 @@ def summarize(transcript: str) -> str:
     return _call_llm(messages, max_tokens=600)
 
 
-def answer_question(transcript: str, question: str, chat_history: list[dict]) -> str:
-    """Answer a question about the video content."""
+def answer_question(transcript: str, question: str, chat_history: list[dict], lang: str = "ko") -> str:
+    """Answer a question about the video content.
+
+    Args:
+        transcript: The video transcript text.
+        question: User's question.
+        chat_history: Previous chat messages.
+        lang: Output language - "ko" for Korean, "en" for English.
+    """
     max_chars = 10000
     truncated = transcript[:max_chars]
 
-    is_korean = _detect_korean(question) or _detect_korean(transcript)
-
-    if is_korean:
+    if lang == "ko":
         system_content = (
             "너는 영상 내용에 대해 질문에 답변하는 어시스턴트야. "
-            "반드시 한국어로 답변해. "
+            "반드시 한국어로 답변해. 질문이 영어여도 한국어로 답변해. "
             "자막에 없는 내용이면 솔직하게 없다고 말해.\n\n"
             f"--- 영상 자막 ---\n{truncated}"
         )
     else:
         system_content = (
             "You are a helpful assistant that answers questions about a video. "
+            "Always answer in English. "
             "Base your answers strictly on the transcript provided. "
             "If the answer is not in the transcript, say so honestly.\n\n"
             f"--- Video Transcript ---\n{truncated}"

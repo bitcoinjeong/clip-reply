@@ -103,12 +103,19 @@ st.markdown(
 )
 
 # --- URL Input ---
-col_input, col_btn = st.columns([5, 1])
+col_input, col_lang, col_btn = st.columns([5, 1, 1])
 with col_input:
     url = st.text_input(
         "Video URL",
         key="url_input",
         placeholder="https://www.youtube.com/watch?v=...",
+        label_visibility="collapsed",
+    )
+with col_lang:
+    output_lang = st.selectbox(
+        "Language",
+        options=["한국어", "English"],
+        key="output_lang",
         label_visibility="collapsed",
     )
 with col_btn:
@@ -137,7 +144,9 @@ if (summarize_btn or url_changed) and url:
             st.session_state.videos_today += 1
 
         with st.spinner("AI is summarizing..."):
-            st.session_state.summary = summarize(transcript)
+            lang = "ko" if output_lang == "한국어" else "en"
+            st.session_state.summary = summarize(transcript, lang)
+            st.session_state.output_lang = lang
 
     except ValueError as e:
         st.error(str(e))
@@ -225,10 +234,12 @@ if st.session_state.summary:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
+                    lang = st.session_state.get("output_lang", "ko")
                     answer = answer_question(
                         st.session_state.transcript,
                         question,
                         st.session_state.chat_history,
+                        lang,
                     )
                     st.markdown(answer)
                     st.session_state.chat_history.append(
