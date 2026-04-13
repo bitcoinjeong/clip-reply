@@ -14,37 +14,71 @@ AI-powered video summarization and Q&A. Paste a YouTube link, get a summary in s
 
 ## Tech Stack
 
-- **Frontend**: Streamlit
+- **Frontend**: Next.js + TypeScript + Tailwind CSS
+- **Backend**: FastAPI (Python)
 - **LLM**: Ollama Cloud (gemma4:31b-cloud) / Groq / OpenAI / local Ollama
 - **Transcript**: youtube-transcript-api
 
+## Project Structure
+
+```
+clip-reply/
+├── frontend/                 # Next.js (TypeScript + Tailwind)
+│   ├── app/                  # App Router pages
+│   ├── components/           # React components
+│   ├── lib/                  # API client
+│   └── .env.example          # Frontend env template
+├── backend/                  # FastAPI
+│   ├── main.py               # API endpoints
+│   ├── transcriber.py        # YouTube transcript extraction
+│   ├── summarizer.py         # LLM summarization & Q&A
+│   ├── config.py             # Environment config
+│   └── .env.example          # Backend env template
+├── app.py                    # Legacy Streamlit app
+└── README.md
+```
+
 ## Quick Start
 
-### 1. Clone & setup
+### 1. Clone
 
 ```bash
 git clone https://github.com/bitcoinjeong/clip-reply.git
 cd clip-reply
-python -m venv venv
+```
+
+### 2. Backend setup
+
+```bash
+cd backend
+python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env            # Edit .env and add your API key
+uvicorn main:app --port 8001
 ```
 
-### 2. Configure secrets
+API runs at `http://localhost:8001`. Test: `curl http://localhost:8001/api/health`
+
+### 3. Frontend setup (new terminal)
 
 ```bash
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev -- --port 3001
 ```
 
-Edit `.streamlit/secrets.toml` and fill in your API key. See [LLM Options](#llm-options) below for provider choices.
+App opens at `http://localhost:3001`.
 
-### 3. Run
+## API Endpoints
 
-```bash
-streamlit run app.py
-```
-
-App opens at `http://localhost:8501`.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| POST | `/api/transcript` | Extract transcript from YouTube URL |
+| POST | `/api/summarize` | Generate AI summary from transcript |
+| POST | `/api/chat` | Q&A about video content |
 
 ## LLM Options
 
@@ -55,30 +89,15 @@ App opens at `http://localhost:8501`.
 | OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-4o-mini` | Paid |
 | Ollama (local) | `openai` | `http://localhost:11434/v1` | `llama3.1` | Free (local) |
 
-## Project Structure
+## Deploy
 
-```
-clip-reply/
-├── app.py                        # Main Streamlit application
-├── transcriber.py                # YouTube transcript extraction
-├── summarizer.py                 # LLM summarization & Q&A
-├── requirements.txt              # Python dependencies
-├── .streamlit/
-│   ├── secrets.toml.example      # Secrets template (copy to secrets.toml)
-│   └── secrets.toml              # Your secrets (git-ignored)
-└── README.md
-```
+**Backend** (Railway / Render):
+- Set environment variables from `backend/.env.example`
+- Start command: `uvicorn main:app --host 0.0.0.0 --port 8000`
 
-## Deploy to Streamlit Cloud
-
-1. Push to GitHub
-2. Connect repo on [share.streamlit.io](https://share.streamlit.io)
-3. In Streamlit Cloud dashboard, add secrets:
-   - `LLM_PROVIDER`
-   - `LLM_API_KEY`
-   - `LLM_BASE_URL`
-   - `LLM_MODEL`
-   - `PROXY_URL` (required - YouTube blocks cloud IPs, use [Webshare](https://www.webshare.io) free tier)
+**Frontend** (Vercel):
+- Connect `frontend/` directory
+- Set `NEXT_PUBLIC_API_URL` to your backend URL
 
 ## Pricing Plan
 
