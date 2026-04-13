@@ -80,6 +80,7 @@ defaults = {
     "video_url": "",
     "video_duration": 0.0,
     "videos_today": 0,
+    "input_key": 0,
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -87,11 +88,12 @@ for key, val in defaults.items():
 
 
 def _reset_for_new_video():
-    """Callback to clear all state including the URL input widget."""
+    """Callback to clear all state and force a fresh URL input widget."""
     for key, val in defaults.items():
-        if key != "videos_today":
+        if key not in ("videos_today", "input_key"):
             st.session_state[key] = val
-    st.session_state["url_input"] = ""
+    # Increment key so Streamlit creates a brand new widget (clears old value)
+    st.session_state["input_key"] += 1
 
 FREE_LIMIT = 3
 
@@ -107,7 +109,7 @@ col_input, col_lang, col_btn = st.columns([5, 1, 1])
 with col_input:
     url = st.text_input(
         "Video URL",
-        key="url_input",
+        key=f"url_input_{st.session_state.input_key}",
         placeholder="https://www.youtube.com/watch?v=...",
         label_visibility="collapsed",
     )
