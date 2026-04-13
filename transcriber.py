@@ -29,7 +29,7 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
     """Fetch YouTube transcript. Returns (text, duration_minutes)."""
     api = YouTubeTranscriptApi()
 
-    lang_preferences = [["ko", "en"], ["en"], ["ko"]]
+    lang_preferences = [["ko", "en"], ["ko"], ["en"]]
 
     for langs in lang_preferences:
         try:
@@ -43,14 +43,19 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
         except Exception:
             continue
 
-    # Fallback: no language filter (catches auto-generated captions)
+    # Fallback: list available transcripts and fetch the first one
     try:
-        result = api.fetch(video_id=video_id)
-        snippets = list(result)
-        text = " ".join(s.text for s in snippets).strip()
-        if len(text) >= 10:
-            duration = snippets[-1].start / 60 if snippets else 0
-            return text, duration
+        transcript_list = api.list(video_id)
+        for t in transcript_list:
+            try:
+                result = api.fetch(video_id=video_id, languages=[t.language_code])
+                snippets = list(result)
+                text = " ".join(s.text for s in snippets).strip()
+                if len(text) >= 10:
+                    duration = snippets[-1].start / 60 if snippets else 0
+                    return text, duration
+            except Exception:
+                continue
     except Exception:
         pass
 
