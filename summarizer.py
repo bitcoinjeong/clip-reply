@@ -1,72 +1,146 @@
-"""LLM-powered summarization and Q&A using Ollama Cloud API."""
+"""LLM-powered summarization and Q&A.
+
+Supports two backends:
+- Ollama Cloud: /api/chat with messages (default, per docs.ollama.com/cloud)
+- OpenAI-compatible: Groq, OpenAI, local Ollama /v1/chat/completions
+
+Set LLM_PROVIDER in secrets.toml:
+  "ollama-cloud" → Ollama Cloud /api/chat
+  "openai"       → OpenAI-compatible /v1/chat/completions
+"""
 
 import requests
 import streamlit as st
 
 
-OLLAMA_API_URL = "https://ollama.com/api/generate"
-MODEL = "gemma4:31b-cloud"
+def _get_config() -> dict:
+    """Load LLM config from Streamlit secrets."""
+    provider = st.secrets.get("LLM_PROVIDER", "ollama-cloud")
+    api_key = st.secrets.get("LLM_API_KEY", "")
+    base_url = st.secrets.get("LLM_BASE_URL", "https://ollama.com")
+    model = st.secrets.get("LLM_MODEL", "gemma4:31b-cloud")
 
-
-def _call_llm(prompt: str, max_tokens: int = 1000) -> str:
-    """Call Ollama Cloud API via /api/generate."""
-    api_key = st.secrets.get("OLLAMA_API_KEY", "")
     if not api_key:
-        raise ValueError("OLLAMA_API_KEY not configured. Add it to Streamlit Cloud secrets.")
+        raise ValueError(
+            "LLM_API_KEY not configured. "
+            "Add it to .streamlit/secrets.toml or Streamlit Cloud secrets."
+        )
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": 0.7,
-        },
+    return {
+        "provider": provider,
+        "api_key": api_key,
+        "base_url": base_url.rstrip("/"),
+        "model": model,
     }
 
+
+def _call_ollama_cloud(messages: list[dict], max_tokens: int = 1000) -> str:
+    """Call Ollama Cloud /api/chat endpoint per docs.ollama.com/cloud."""
+    cfg = _get_config()
     response = requests.post(
-        OLLAMA_API_URL,
-        headers=headers,
-        json=payload,
+        f"{cfg['base_url']}/api/chat",
+        headers={
+            "Authorization": f"Bearer {cfg['api_key']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": cfg["model"],
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "num_predict": max_tokens,
+                "temperature": 0.4,
+            },
+        },
         timeout=120,
     )
     if not response.ok:
-        raise ValueError(f"API error {response.status_code} from {response.url}: {response.text[:200]}")
+        raise ValueError(
+            f"Ollama Cloud API error {response.status_code}: {response.text[:300]}"
+        )
     data = response.json()
-    return data.get("response", "")
+    return data.get("message", {}).get("content", "")
+
+
+def _call_openai_compat(messages: list[dict], max_tokens: int = 1000) -> str:
+    """Call OpenAI-compatible /v1/chat/completions endpoint."""
+    from openai import OpenAI
+
+    cfg = _get_config()
+    client = OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
+    response = client.chat.completions.create(
+        model=cfg["model"],
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=0.4,
+    )
+    return response.choices[0].message.content
+
+
+def _call_llm(messages: list[dict], max_tokens: int = 1000) -> str:
+    """Route to the correct backend based on LLM_PROVIDER."""
+    cfg = _get_config()
+
+    if cfg["provider"] == "ollama-cloud":
+        return _call_ollama_cloud(messages, max_tokens)
+    else:
+        return _call_openai_compat(messages, max_tokens)
 
 
 def summarize(transcript: str) -> str:
-    """Generate a bullet-point summary of the video transcript."""
-    prompt = f"""Summarize the following video transcript in 3-5 concise bullet points. 
-Write in the same language as the transcript. Do not add emoji.
+    """Generate a structured summary of the video transcript."""
+    max_chars = 12000
+    truncated = transcript[:max_chars]
+    if len(transcript) > max_chars:
+        truncated += "\n\n[... transcript truncated ...]"
 
-Transcript:
-{transcript[:8000]}"""
-    return _call_llm(prompt, max_tokens=500)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a video summarization assistant. "
+                "Write concise, accurate summaries. "
+                "Always respond in the same language as the transcript."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Summarize this video transcript. Provide:\n"
+                "1. A one-line TL;DR\n"
+                "2. 3-5 key bullet points\n"
+                "3. Key topics/keywords mentioned\n\n"
+                f"Transcript:\n{truncated}"
+            ),
+        },
+    ]
+
+    return _call_llm(messages, max_tokens=600)
 
 
 def answer_question(transcript: str, question: str, chat_history: list[dict]) -> str:
     """Answer a question about the video content."""
-    history_str = ""
-    for msg in chat_history:
-        role = "User" if msg["role"] == "user" else "Assistant"
-        history_str += f"{role}: {msg['content']}\n"
+    max_chars = 10000
+    truncated = transcript[:max_chars]
 
-    prompt = f"""Based on the following video transcript, answer the user's question. 
-If the answer is not in the transcript, say so honestly.
-Write in the same language as the question.
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful assistant that answers questions about a video. "
+                "Base your answers strictly on the transcript provided. "
+                "If the answer is not in the transcript, say so honestly. "
+                "Respond in the same language as the user's question.\n\n"
+                f"--- Video Transcript ---\n{truncated}"
+            ),
+        },
+    ]
 
-Transcript:
-{transcript[:6000]}
+    # Include recent chat history (last 10 messages)
+    for msg in chat_history[-10:]:
+        if msg["role"] in ("user", "assistant"):
+            messages.append({"role": msg["role"], "content": msg["content"]})
 
-Conversation so far:
-{history_str}
+    messages.append({"role": "user", "content": question})
 
-Question: {question}"""
-
-    return _call_llm(prompt, max_tokens=800)
+    return _call_llm(messages, max_tokens=800)

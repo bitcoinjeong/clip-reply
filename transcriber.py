@@ -1,4 +1,4 @@
-"""Video transcript extraction: YouTube via youtube-transcript-api."""
+"""Video transcript extraction for YouTube."""
 
 import re
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -25,48 +25,50 @@ def is_tiktok_url(url: str) -> bool:
     return bool(re.search(r"tiktok\.com", url))
 
 
-def get_youtube_transcript(video_id: str) -> str:
-    """Fetch YouTube transcript and return full text."""
+def get_youtube_transcript(video_id: str) -> tuple[str, float]:
+    """Fetch YouTube transcript. Returns (text, duration_minutes)."""
     api = YouTubeTranscriptApi()
-    try:
-        # Try fetching with language preferences
-        for langs in [["ko", "en"], ["en"], ["ko"]]:
-            try:
-                result = api.fetch(video_id=video_id, languages=langs)
-                text = " ".join(snippet.text for snippet in result)
-                return text
-            except Exception:
-                continue
 
-        # Fall back: no language filter
+    lang_preferences = [["ko", "en"], ["en"], ["ko"]]
+
+    for langs in lang_preferences:
         try:
-            result = api.fetch(video_id=video_id)
-            text = " ".join(snippet.text for snippet in result)
-            return text
+            result = api.fetch(video_id=video_id, languages=langs)
+            snippets = list(result)
+            text = " ".join(s.text for s in snippets)
+            duration = snippets[-1].start / 60 if snippets else 0
+            return text, duration
         except Exception:
-            pass
+            continue
 
-        raise ValueError("No transcript found for this video. It may not have subtitles.")
-    except ValueError:
-        raise
-    except Exception as e:
-        error_str = str(e).lower()
-        if "disabled" in error_str:
-            raise ValueError("This video has transcripts disabled.")
-        if "not found" in error_str or "no transcript" in error_str:
-            raise ValueError("No transcript found for this video. It may not have subtitles.")
-        raise ValueError(f"Failed to fetch transcript: {str(e)}")
+    # Fallback: no language filter
+    try:
+        result = api.fetch(video_id=video_id)
+        snippets = list(result)
+        text = " ".join(s.text for s in snippets)
+        duration = snippets[-1].start / 60 if snippets else 0
+        return text, duration
+    except Exception:
+        pass
+
+    raise ValueError("No transcript found. This video may not have subtitles enabled.")
 
 
-def get_transcript(url: str) -> tuple[str, str]:
-    """Get transcript from video URL. Returns (transcript_text, source_type)."""
+def get_transcript(url: str) -> tuple[str, str, float]:
+    """Get transcript from video URL.
+
+    Returns: (transcript_text, source_type, duration_minutes)
+    """
     if is_youtube_url(url):
         video_id = extract_video_id(url)
         if not video_id:
             raise ValueError("Could not extract YouTube video ID from the URL.")
-        transcript = get_youtube_transcript(video_id)
-        return transcript, "youtube"
-    elif is_tiktok_url(url):
-        raise ValueError("TikTok transcript extraction is not yet supported. YouTube URLs are fully supported.")
-    else:
-        raise ValueError("Unsupported URL. Please provide a YouTube video URL.")
+        transcript, duration = get_youtube_transcript(video_id)
+        return transcript, "youtube", duration
+
+    if is_tiktok_url(url):
+        raise ValueError(
+            "TikTok is not yet supported. YouTube URLs are fully supported."
+        )
+
+    raise ValueError("Unsupported URL. Please provide a YouTube video link.")
