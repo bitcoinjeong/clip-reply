@@ -4,47 +4,36 @@ import requests
 import streamlit as st
 
 
-OLLAMA_BASE_URL = "https://api.ollama.com/api"
-MODEL = "llama3"
+OLLAMA_BASE_URL = "https://api.ollama.com/v1"
+MODEL = "qwen3.5:27b-cloud"
 
 
 def _call_llm(messages: list[dict], max_tokens: int = 1000) -> str:
-    """Call Ollama Cloud API with /api/generate endpoint."""
+    """Call Ollama Cloud API via OpenAI-compatible /v1/chat/completions."""
     api_key = st.secrets.get("OLLAMA_API_KEY", "")
     if not api_key:
-        raise ValueError("OLLAMA_API_KEY not configured. Add it to .streamlit/secrets.toml")
+        raise ValueError("OLLAMA_API_KEY not configured. Add it to Streamlit Cloud secrets.")
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-
-    # Build prompt from messages
-    prompt_parts = []
-    for msg in messages:
-        role = msg["role"].capitalize()
-        prompt_parts.append(f"{role}: {msg['content']}")
-    prompt = "\n\n".join(prompt_parts)
-
     payload = {
         "model": MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": 0.7,
-        },
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.7,
     }
 
     response = requests.post(
-        f"{OLLAMA_BASE_URL}/generate",
+        f"{OLLAMA_BASE_URL}/chat/completions",
         headers=headers,
         json=payload,
         timeout=120,
     )
     response.raise_for_status()
     data = response.json()
-    return data.get("response", "")
+    return data["choices"][0]["message"]["content"]
 
 
 def summarize(transcript: str) -> str:
