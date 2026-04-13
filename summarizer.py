@@ -5,7 +5,7 @@ import streamlit as st
 
 
 OLLAMA_API_URL = "https://ollama.com/api/generate"
-MODEL = "gemma4:27b-cloud"
+MODEL = "gemma4:31b-cloud"
 
 
 def _call_llm(prompt: str, max_tokens: int = 1000) -> str:
