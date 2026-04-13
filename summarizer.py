@@ -1,7 +1,7 @@
 """LLM-powered summarization and Q&A.
 
 Supports two backends:
-- Ollama Cloud: /api/chat with messages (default, per docs.ollama.com/cloud)
+- Ollama Cloud: /api/chat (default, per docs.ollama.com/cloud)
 - OpenAI-compatible: Groq, OpenAI, local Ollama /v1/chat/completions
 
 Set LLM_PROVIDER in secrets.toml:
@@ -34,9 +34,30 @@ def _get_config() -> dict:
     }
 
 
+def _flatten_to_single_user(messages: list[dict]) -> list[dict]:
+    """Merge all messages into a single user message for Ollama Cloud.
+
+    Ollama Cloud may ignore system role or lose context with multiple messages.
+    Combining everything into one user message is more reliable.
+    """
+    parts = []
+    for m in messages:
+        if m["role"] == "system":
+            parts.append(f"[Instructions]\n{m['content']}")
+        elif m["role"] == "user":
+            parts.append(f"[User]\n{m['content']}")
+        elif m["role"] == "assistant":
+            parts.append(f"[Assistant]\n{m['content']}")
+    return [{"role": "user", "content": "\n\n".join(parts)}]
+
+
 def _call_ollama_cloud(messages: list[dict], max_tokens: int = 1000) -> str:
     """Call Ollama Cloud /api/chat endpoint per docs.ollama.com/cloud."""
     cfg = _get_config()
+
+    # Flatten to single user message for reliability
+    flat_messages = _flatten_to_single_user(messages)
+
     response = requests.post(
         f"{cfg['base_url']}/api/chat",
         headers={
@@ -45,7 +66,7 @@ def _call_ollama_cloud(messages: list[dict], max_tokens: int = 1000) -> str:
         },
         json={
             "model": cfg["model"],
-            "messages": messages,
+            "messages": flat_messages,
             "stream": False,
             "options": {
                 "num_predict": max_tokens,
@@ -95,6 +116,9 @@ def _detect_korean(text: str) -> bool:
 
 def summarize(transcript: str) -> str:
     """Generate a structured summary of the video transcript."""
+    if not transcript or not transcript.strip():
+        raise ValueError("Transcript is empty. Cannot generate summary.")
+
     max_chars = 12000
     truncated = transcript[:max_chars]
     if len(transcript) > max_chars:
