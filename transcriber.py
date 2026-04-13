@@ -1,6 +1,7 @@
 """Video transcript extraction for YouTube."""
 
 import re
+import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 
 
@@ -25,10 +26,18 @@ def is_tiktok_url(url: str) -> bool:
     return bool(re.search(r"tiktok\.com", url))
 
 
+def _build_api() -> YouTubeTranscriptApi:
+    """Create YouTubeTranscriptApi with optional proxy from secrets."""
+    proxy_url = st.secrets.get("PROXY_URL", "")
+    if proxy_url:
+        return YouTubeTranscriptApi(proxies={"https": proxy_url, "http": proxy_url})
+    return YouTubeTranscriptApi()
+
+
 def get_youtube_transcript(video_id: str) -> tuple[str, float]:
     """Fetch YouTube transcript. Returns (text, duration_minutes)."""
-    api = YouTubeTranscriptApi()
-    errors = []
+    api = _build_api()
+    ip_blocked = False
 
     lang_preferences = [["ko", "en"], ["ko"], ["en"]]
 
@@ -38,12 +47,12 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
             snippets = list(result)
             text = " ".join(s.text for s in snippets).strip()
             if len(text) < 10:
-                errors.append(f"langs={langs}: too short ({len(text)} chars)")
                 continue
             duration = snippets[-1].start / 60 if snippets else 0
             return text, duration
         except Exception as e:
-            errors.append(f"langs={langs}: {e}")
+            if "blocking" in str(e).lower() or "ip" in str(e).lower():
+                ip_blocked = True
             continue
 
     # Fallback: list available transcripts and fetch the first one
@@ -57,15 +66,22 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
                 if len(text) >= 10:
                     duration = snippets[-1].start / 60 if snippets else 0
                     return text, duration
-                errors.append(f"fallback lang={t.language_code}: too short ({len(text)} chars)")
             except Exception as e:
-                errors.append(f"fallback lang={t.language_code}: {e}")
+                if "blocking" in str(e).lower() or "ip" in str(e).lower():
+                    ip_blocked = True
                 continue
     except Exception as e:
-        errors.append(f"list(): {e}")
+        if "blocking" in str(e).lower() or "ip" in str(e).lower():
+            ip_blocked = True
 
-    error_detail = "; ".join(errors[-3:]) if errors else "unknown"
-    raise ValueError(f"No transcript found ({error_detail})")
+    if ip_blocked:
+        raise ValueError(
+            "YouTube is blocking this server's IP address. "
+            "A proxy is required for cloud deployment. "
+            "Add PROXY_URL to Streamlit secrets."
+        )
+
+    raise ValueError("No transcript found. This video may not have subtitles enabled.")
 
 
 def get_transcript(url: str) -> tuple[str, str, float]:
