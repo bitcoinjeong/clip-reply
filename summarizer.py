@@ -4,12 +4,12 @@ import requests
 import streamlit as st
 
 
-OLLAMA_BASE_URL = "https://api.ollama.com/v1"
-MODEL = "qwen3.5:27b-cloud"
+OLLAMA_API_URL = "https://ollama.com/api/generate"
+MODEL = "gemma4:27b-cloud"
 
 
-def _call_llm(messages: list[dict], max_tokens: int = 1000) -> str:
-    """Call Ollama Cloud API via OpenAI-compatible /v1/chat/completions."""
+def _call_llm(prompt: str, max_tokens: int = 1000) -> str:
+    """Call Ollama Cloud API via /api/generate."""
     api_key = st.secrets.get("OLLAMA_API_KEY", "")
     if not api_key:
         raise ValueError("OLLAMA_API_KEY not configured. Add it to Streamlit Cloud secrets.")
@@ -20,20 +20,23 @@ def _call_llm(messages: list[dict], max_tokens: int = 1000) -> str:
     }
     payload = {
         "model": MODEL,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": 0.7,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "num_predict": max_tokens,
+            "temperature": 0.7,
+        },
     }
 
     response = requests.post(
-        f"{OLLAMA_BASE_URL}/chat/completions",
+        OLLAMA_API_URL,
         headers=headers,
         json=payload,
         timeout=120,
     )
     response.raise_for_status()
     data = response.json()
-    return data["choices"][0]["message"]["content"]
+    return data.get("response", "")
 
 
 def summarize(transcript: str) -> str:
@@ -43,8 +46,7 @@ Write in the same language as the transcript. Do not add emoji.
 
 Transcript:
 {transcript[:8000]}"""
-    messages = [{"role": "user", "content": prompt}]
-    return _call_llm(messages, max_tokens=500)
+    return _call_llm(prompt, max_tokens=500)
 
 
 def answer_question(transcript: str, question: str, chat_history: list[dict]) -> str:
@@ -66,5 +68,4 @@ Conversation so far:
 
 Question: {question}"""
 
-    messages = [{"role": "user", "content": prompt}]
-    return _call_llm(messages, max_tokens=800)
+    return _call_llm(prompt, max_tokens=800)
