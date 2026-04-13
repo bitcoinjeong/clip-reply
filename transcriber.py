@@ -1,9 +1,7 @@
-"""Video transcript extraction: YouTube via youtube-transcript-api, TikTok via URL metadata."""
+"""Video transcript extraction: YouTube via youtube-transcript-api."""
 
 import re
-import html
-from xml.etree.ElementTree import ParseError
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api import YouTubeTranscriptApi
 
 
 def extract_video_id(url: str) -> str | None:
@@ -29,47 +27,34 @@ def is_tiktok_url(url: str) -> bool:
 
 def get_youtube_transcript(video_id: str) -> str:
     """Fetch YouTube transcript and return full text."""
+    api = YouTubeTranscriptApi()
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-    except ParseError:
-        raise ValueError("YouTube returned an invalid response. This may be a temporary issue. Try again in a moment, or try a different video.")
-    except Exception as e:
-        if "no element found" in str(e).lower() or "ParseError" in type(e).__name__:
-            raise ValueError("YouTube blocked the transcript request. This is a known issue with some videos. Try a different video.")
-        raise ValueError(f"Failed to fetch transcript: {str(e)}")
-
-    try:
-        # Prefer manually created, fall back to auto-generated
-        transcript = None
-        for lang_list in (["ko", "en", "en-US"], ["en", "en-US"], ["ko"]):
+        # Try fetching with language preferences
+        for langs in [["ko", "en"], ["en"], ["ko"]]:
             try:
-                transcript = transcript_list.find_manually_created_transcript(lang_list)
-                break
-            except NoTranscriptFound:
-                try:
-                    transcript = transcript_list.find_generated_transcript(lang_list)
-                    break
-                except NoTranscriptFound:
-                    continue
+                result = api.fetch(video_id=video_id, languages=langs)
+                text = " ".join(snippet.text for snippet in result)
+                return text
+            except Exception:
+                continue
 
-        if transcript is None:
-            # Try any available transcript
-            available = list(transcript_list)
-            if available:
-                transcript = available[0]
-            else:
-                raise ValueError("No transcript found for this video. It may not have subtitles.")
+        # Fall back: no language filter
+        try:
+            result = api.fetch(video_id=video_id)
+            text = " ".join(snippet.text for snippet in result)
+            return text
+        except Exception:
+            pass
 
-        chunks = transcript.fetch()
-        text = " ".join(chunk["text"] for chunk in chunks)
-        return text
+        raise ValueError("No transcript found for this video. It may not have subtitles.")
     except ValueError:
         raise
-    except ParseError:
-        raise ValueError("YouTube returned an invalid response. Try a different video or try again later.")
     except Exception as e:
-        if "no element found" in str(e).lower():
-            raise ValueError("YouTube blocked the transcript request. Try a different video or try again later.")
+        error_str = str(e).lower()
+        if "disabled" in error_str:
+            raise ValueError("This video has transcripts disabled.")
+        if "not found" in error_str or "no transcript" in error_str:
+            raise ValueError("No transcript found for this video. It may not have subtitles.")
         raise ValueError(f"Failed to fetch transcript: {str(e)}")
 
 
