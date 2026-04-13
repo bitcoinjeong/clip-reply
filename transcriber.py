@@ -28,6 +28,7 @@ def is_tiktok_url(url: str) -> bool:
 def get_youtube_transcript(video_id: str) -> tuple[str, float]:
     """Fetch YouTube transcript. Returns (text, duration_minutes)."""
     api = YouTubeTranscriptApi()
+    errors = []
 
     lang_preferences = [["ko", "en"], ["ko"], ["en"]]
 
@@ -37,10 +38,12 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
             snippets = list(result)
             text = " ".join(s.text for s in snippets).strip()
             if len(text) < 10:
+                errors.append(f"langs={langs}: too short ({len(text)} chars)")
                 continue
             duration = snippets[-1].start / 60 if snippets else 0
             return text, duration
-        except Exception:
+        except Exception as e:
+            errors.append(f"langs={langs}: {e}")
             continue
 
     # Fallback: list available transcripts and fetch the first one
@@ -54,12 +57,15 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
                 if len(text) >= 10:
                     duration = snippets[-1].start / 60 if snippets else 0
                     return text, duration
-            except Exception:
+                errors.append(f"fallback lang={t.language_code}: too short ({len(text)} chars)")
+            except Exception as e:
+                errors.append(f"fallback lang={t.language_code}: {e}")
                 continue
-    except Exception:
-        pass
+    except Exception as e:
+        errors.append(f"list(): {e}")
 
-    raise ValueError("No transcript found. This video may not have subtitles enabled.")
+    error_detail = "; ".join(errors[-3:]) if errors else "unknown"
+    raise ValueError(f"No transcript found ({error_detail})")
 
 
 def get_transcript(url: str) -> tuple[str, str, float]:
