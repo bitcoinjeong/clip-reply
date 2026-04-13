@@ -34,7 +34,8 @@ def _call_llm(prompt: str, max_tokens: int = 1000) -> str:
         json=payload,
         timeout=120,
     )
-    response.raise_for_status()
+    if not response.ok:
+        raise ValueError(f"API error {response.status_code} from {response.url}: {response.text[:200]}")
     data = response.json()
     return data.get("response", "")
 
