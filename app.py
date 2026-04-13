@@ -215,8 +215,12 @@ if st.session_state.summary:
         )
 
     if show_transcript:
-        with st.expander("Full Transcript", expanded=True):
-            st.text(st.session_state.transcript)
+        st.text_area(
+            "Full Transcript",
+            value=st.session_state.transcript,
+            height=300,
+            disabled=True,
+        )
 
     # --- Q&A Chat ---
     st.divider()
