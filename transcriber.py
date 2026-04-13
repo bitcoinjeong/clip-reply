@@ -35,19 +35,22 @@ def get_youtube_transcript(video_id: str) -> tuple[str, float]:
         try:
             result = api.fetch(video_id=video_id, languages=langs)
             snippets = list(result)
-            text = " ".join(s.text for s in snippets)
+            text = " ".join(s.text for s in snippets).strip()
+            if len(text) < 10:
+                continue
             duration = snippets[-1].start / 60 if snippets else 0
             return text, duration
         except Exception:
             continue
 
-    # Fallback: no language filter
+    # Fallback: no language filter (catches auto-generated captions)
     try:
         result = api.fetch(video_id=video_id)
         snippets = list(result)
-        text = " ".join(s.text for s in snippets)
-        duration = snippets[-1].start / 60 if snippets else 0
-        return text, duration
+        text = " ".join(s.text for s in snippets).strip()
+        if len(text) >= 10:
+            duration = snippets[-1].start / 60 if snippets else 0
+            return text, duration
     except Exception:
         pass
 
