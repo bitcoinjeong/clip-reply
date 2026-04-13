@@ -117,7 +117,8 @@ if remaining == 0:
 
 
 # --- Summarize Action ---
-if summarize_btn and url:
+url_changed = url and url != st.session_state.video_url
+if (summarize_btn or url_changed) and url:
     try:
         with st.spinner("Extracting transcript..."):
             transcript, source, duration = get_transcript(url)
